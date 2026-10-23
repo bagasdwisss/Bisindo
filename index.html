@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="id" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BISINDO Translator - Penerjemah Bahasa Isyarat Real-Time</title>
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#ecfdf5',
+              100: '#d1fae5',
+              400: '#34d399',
+              500: '#10b981',
+              600: '#059669',
+              700: '#047857',
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <!-- TensorFlow.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js"></script>
+
+  <!-- MediaPipe Hands & Camera Utils -->
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+
+  <style>
+    /* Mirror webcam feed */
+    .mirror-mode {
+      transform: scaleX(-1);
+    }
+    
+    /* Custom scrollbars */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #111827;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #374151;
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #4b5563;
+    }
+
+    /* Pulse animation for detection indicator */
+    @keyframes glow-pulse {
+      0%, 100% { opacity: 0.6; transform: scale(1); }
+      50% { opacity: 1; transform: scale(1.05); }
+    }
+    .glowing-dot {
+      animation: glow-pulse 2s infinite ease-in-out;
+    }
+  </style>
+</head>
+<body class="bg-gray-950 text-gray-100 min-h-screen flex flex-col antialiased selection:bg-brand-500 selection:text-white">
+
+  <!-- Header -->
+  <header class="border-b border-gray-800 bg-gray-900/70 backdrop-blur sticky top-0 z-30">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5 flex items-center justify-between">
+      <div class="flex items-center space-x-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-brand-600 to-emerald-400 flex items-center justify-center shadow-lg shadow-brand-500/20">
+          <i data-lucide="hand" class="w-6 h-6 text-white"></i>
+        </div>
+        <div>
+          <h1 class="font-bold text-lg sm:text-xl text-white tracking-tight flex items-center gap-2">
+            BISINDO Translator
+            <span class="text-xs px-2 py-0.5 rounded-full font-medium bg-brand-500/20 text-brand-400 border border-brand-500/30">
+              Web AI (TF.js)
+            </span>
+          </h1>
+          <p class="text-xs text-gray-400">Penerjemah Bahasa Isyarat Indonesia Real-time Berbasis AI di Browser</p>
+        </div>
+      </div>
+
+      <!-- System Status Pill -->
+      <div id="system-status-pill" class="flex items-center space-x-2 bg-gray-800/80 border border-gray-700/60 px-3 py-1.5 rounded-full text-xs">
+        <span id="system-status-dot" class="w-2.5 h-2.5 rounded-full bg-yellow-400 animate-pulse"></span>
+        <span id="system-status-text" class="text-gray-300 font-medium">Memuat Model AI...</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+      <!-- Left Column: Video & Landmark Visualizer (7 cols) -->
+      <div class="lg:col-span-7 flex flex-col space-y-4">
+        
+        <!-- Video Container Card -->
+        <div class="relative bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden shadow-2xl aspect-[4/3] flex items-center justify-center group">
+          
+          <!-- Hidden Video Source -->
+          <video id="webcam" class="hidden" playsinline muted autoplay></video>
+
+          <!-- Render Canvas (Mirrored) -->
+          <canvas id="output-canvas" class="w-full h-full object-cover mirror-mode"></canvas>
+
+          <!-- Placeholder when camera is stopped -->
+          <div id="camera-placeholder" class="absolute inset-0 flex flex-col items-center justify-center bg-gray-900/95 p-6 text-center z-10">
+            <div class="w-16 h-16 rounded-2xl bg-gray-800 border border-gray-700 flex items-center justify-center mb-4 text-gray-400">
+              <i data-lucide="video-off" class="w-8 h-8"></i>
+            </div>
+            <h3 class="text-lg font-semibold text-white mb-1">Kamera Belum Aktif</h3>
+            <p class="text-sm text-gray-400 max-w-sm mb-6">
+              Nyalakan kamera untuk mulai mendeteksi gestur tangan BISINDO secara langsung.
+            </p>
+            <button id="btn-start-camera" class="px-5 py-2.5 bg-brand-600 hover:bg-brand-500 active:bg-brand-700 text-white font-medium text-sm rounded-xl transition-all shadow-lg shadow-brand-600/30 flex items-center gap-2">
+              <i data-lucide="camera" class="w-4 h-4"></i>
+              Mulai Kamera
+            </button>
+          </div>
+
+          <!-- Video Overlays & Badges (Active Mode) -->
+          <div id="video-hud" class="absolute top-3 left-3 right-3 flex items-center justify-between pointer-events-none z-10 transition-opacity opacity-0">
+            <!-- Left Badges: Mode & Hands Count -->
+            <div class="flex items-center space-x-2">
+              <span id="badge-active-mode" class="px-2.5 py-1 rounded-lg text-xs font-semibold bg-gray-900/80 backdrop-blur border border-gray-700 text-brand-400 shadow">
+                Mode Kata
+              </span>
+              <span id="badge-hands-count" class="px-2.5 py-1 rounded-lg text-xs font-semibold bg-gray-900/80 backdrop-blur border border-gray-700 text-gray-300 shadow flex items-center gap-1.5">
+                <i data-lucide="hand" class="w-3.5 h-3.5 text-gray-400"></i>
+                <span id="hands-count-text">0 Tangan</span>
+              </span>
+            </div>
+
+            <!-- Right Badges: FPS -->
+            <span id="badge-fps" class="px-2.5 py-1 rounded-lg text-xs font-mono bg-gray-900/80 backdrop-blur border border-gray-700 text-gray-400 shadow">
+              0 FPS
+            </span>
+          </div>
+
+          <!-- Live Gesture Hold Progress Bar (Bottom of Video) -->
+          <div id="prediction-hold-bar-container" class="absolute bottom-0 left-0 right-0 h-1.5 bg-gray-800/80 z-20 overflow-hidden">
+            <div id="prediction-hold-bar" class="h-full bg-brand-400 transition-all duration-75 w-0"></div>
+          </div>
+        </div>
+
+        <!-- Camera Control Bar -->
+        <div class="flex flex-wrap items-center justify-between gap-3 p-3 bg-gray-900/60 border border-gray-800 rounded-xl">
+          <div class="flex items-center space-x-2">
+            <button id="btn-toggle-cam" class="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-200 text-xs font-medium rounded-lg transition-colors flex items-center gap-2">
+              <i data-lucide="power" class="w-3.5 h-3.5 text-brand-400"></i>
+              <span id="btn-toggle-cam-text">Nyalakan Kamera</span>
+            </button>
+            <button id="btn-switch-camera" class="px-3 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 text-xs font-medium rounded-lg transition-colors flex items-center gap-1.5" title="Ganti Kamera">
+              <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
+              <span>Kamera</span>
+            </button>
+          </div>
+
+          <!-- Realtime Detection Label -->
+          <div class="flex items-center space-x-2 text-xs">
+            <span class="text-gray-400">Terdeteksi saat ini:</span>
+            <span id="current-detection-label" class="font-bold text-sm text-brand-400 bg-brand-500/10 px-2.5 py-0.5 rounded border border-brand-500/20">
+              -
+            </span>
+            <span id="current-confidence-label" class="text-gray-400 font-mono">
+              (0%)
+            </span>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Right Column: Results & Controls (5 cols) -->
+      <div class="lg:col-span-5 flex flex-col space-y-5">
+        
+        <!-- Translation Output Card -->
+        <div class="bg-gray-900 border border-gray-800 rounded-2xl p-5 shadow-xl flex flex-col space-y-3">
+          <div class="flex items-center justify-between">
+            <h2 class="text-sm font-semibold text-gray-300 uppercase tracking-wider flex items-center gap-2">
+              <i data-lucide="message-square-quote" class="w-4 h-4 text-brand-400"></i>
+              Hasil Terjemahan
+            </h2>
+            <button id="btn-copy-text" class="text-xs text-gray-400 hover:text-white transition-colors flex items-center gap-1 hover:bg-gray-800 px-2 py-1 rounded">
+              <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+              <span id="copy-text-feedback">Salin</span>
+            </button>
+          </div>
+
+          <!-- Sentence Display Area (Matches app.py styled container) -->
+          <div class="bg-gray-950 border border-gray-800/80 rounded-xl p-4 min-h-[140px] max-h-[220px] overflow-y-auto flex flex-col justify-between">
+            <div id="translation-output" class="text-brand-400 font-semibold text-xl sm:text-2xl leading-relaxed break-words">
+              <!-- Result text inserted here -->
+              <span class="text-gray-600 font-normal text-base italic">Belum ada kata terdeteksi...</span>
+            </div>
+          </div>
+
+          <!-- Quick Action Buttons -->
+          <div class="grid grid-cols-2 gap-2 pt-1">
+            <button id="btn-delete-last" class="px-3 py-2 bg-gray-800 hover:bg-gray-700 active:bg-gray-800 text-gray-200 text-xs font-medium rounded-lg transition-colors flex items-center justify-center gap-1.5">
+              <i data-lucide="delete" class="w-3.5 h-3.5 text-red-400"></i>
+              Hapus Terakhir
+            </button>
+            <button id="btn-reset-sentence" class="px-3 py-2 bg-gray-800 hover:bg-gray-700 active:bg-gray-800 text-gray-200 text-xs font-medium rounded-lg transition-colors flex items-center justify-center gap-1.5">
+              <i data-lucide="rotate-ccw" class="w-3.5 h-3.5 text-yellow-400"></i>
+              Reset Kalimat
+            </button>
+          </div>
+        </div>
+
+        <!-- Mode Selection Card -->
+        <div class="bg-gray-900 border border-gray-800 rounded-2xl p-5 shadow-xl flex flex-col space-y-3">
+          <h3 class="text-xs font-semibold text-gray-400 uppercase tracking-wider flex items-center gap-1.5">
+            <i data-lucide="sliders-horizontal" class="w-3.5 h-3.5 text-brand-400"></i>
+            Pilihan Mode Pengenalan
+          </h3>
+
+          <div class="grid grid-cols-2 gap-3">
+            <!-- Mode Kata Option -->
+            <label id="label-mode-kata" class="relative flex flex-col p-3.5 rounded-xl border-2 border-brand-500 bg-brand-500/10 cursor-pointer transition-all select-none">
+              <input type="radio" name="translation-mode" value="kata" checked class="sr-only" />
+              <div class="flex items-center justify-between mb-1">
+                <span class="font-bold text-sm text-white">Mode Kata</span>
+                <i data-lucide="check-circle-2" class="w-4 h-4 text-brand-400 mode-check-icon"></i>
+              </div>
+              <span class="text-xs text-gray-400">38 Kosakata Isyarat (saya, terima kasih, dll.)</span>
+            </label>
+
+            <!-- Mode Abjad Option -->
+            <label id="label-mode-abjad" class="relative flex flex-col p-3.5 rounded-xl border-2 border-gray-800 bg-gray-800/40 hover:border-gray-700 cursor-pointer transition-all select-none">
+              <input type="radio" name="translation-mode" value="abjad" class="sr-only" />
+              <div class="flex items-center justify-between mb-1">
+                <span class="font-bold text-sm text-gray-200">Mode Abjad</span>
+                <i data-lucide="circle" class="w-4 h-4 text-gray-500 mode-check-icon"></i>
+              </div>
+              <span class="text-xs text-gray-400">Huruf A - Z (mengeja kata secara bertahap)</span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Text-to-Speech (TTS) Card -->
+        <div class="bg-gray-900 border border-gray-800 rounded-2xl p-5 shadow-xl flex flex-col space-y-4">
+          <h3 class="text-xs font-semibold text-gray-400 uppercase tracking-wider flex items-center gap-1.5">
+            <i data-lucide="volume-2" class="w-3.5 h-3.5 text-brand-400"></i>
+            Text-To-Speech (Suara Bahasa Indonesia)
+          </h3>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <!-- Manual Speak Button -->
+            <button id="btn-speak-sentence" class="px-4 py-2.5 bg-brand-600 hover:bg-brand-500 active:bg-brand-700 text-white font-medium text-xs rounded-xl transition-all shadow-md shadow-brand-600/20 flex items-center justify-center gap-2">
+              <i data-lucide="volume-2" class="w-4 h-4"></i>
+              Ucapkan Kalimat
+            </button>
+
+            <!-- Auto Speak Toggle -->
+            <div class="flex items-center justify-between px-3.5 py-2 bg-gray-800/60 border border-gray-700/60 rounded-xl">
+              <span class="text-xs font-medium text-gray-300">Auto-Ucap Kata</span>
+              <label class="relative inline-flex items-center cursor-pointer">
+                <input type="checkbox" id="toggle-auto-speak" class="sr-only peer" />
+                <div class="w-9 h-5 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-brand-500"></div>
+              </label>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+  </main>
+
+  <!-- Footer -->
+  <footer class="border-t border-gray-800/80 bg-gray-950 py-4 text-center text-xs text-gray-500 mt-auto">
+    <p>BISINDO Translator &bull; Tugas Akhir &bull; Dijalankan secara lokal di browser via TensorFlow.js & MediaPipe</p>
+  </footer>
+
+  <!-- Main JavaScript File -->
+  <script src="js/app.js"></script>
+</body>
+</html>

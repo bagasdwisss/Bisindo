@@ -1,0 +1,28 @@
+# Python virtual environment
+venv/
+env/
+.venv/
+
+# Python bytecode & cache
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# Dataset & training artifacts (Gigabytes of images/videos)
+raw_dataset/
+dataset/
+yolo_dataset/
+features_kosakata/
+training_results/
+training_results_abjad/
+
+# OS / Editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Environment files
+.env
+.env.local
