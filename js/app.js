@@ -81,6 +81,23 @@ const elements = {
 
 const canvasCtx = elements.canvas.getContext('2d');
 
+// Register custom regularizer to handle Keras L2 serialization seamlessly
+try {
+  if (window.tf && tf.serialization) {
+    class L2Regularizer extends tf.regularizers.l1l2 {
+      constructor(config) {
+        super({ l2: config ? (config.l2 || 0) : 0 });
+      }
+      static get className() {
+        return 'L2';
+      }
+    }
+    tf.serialization.registerClass(L2Regularizer);
+  }
+} catch (e) {
+  console.warn('L2 regularizer registration notice:', e);
+}
+
 // --- 1. Model Loading ---
 async function loadModels() {
   try {

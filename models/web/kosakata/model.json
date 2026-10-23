@@ -56,12 +56,6 @@
               "gamma_regularizer": null,
               "beta_constraint": null,
               "gamma_constraint": null
-            },
-            "build_config": {
-              "input_shape": [
-                null,
-                126
-              ]
             }
           },
           {
@@ -83,22 +77,11 @@
                 "class_name": "Zeros",
                 "config": {}
               },
-              "kernel_regularizer": {
-                "class_name": "L2",
-                "config": {
-                  "l2": 0.0010000000474974513
-                }
-              },
+              "kernel_regularizer": null,
               "bias_regularizer": null,
               "activity_regularizer": null,
               "kernel_constraint": null,
               "bias_constraint": null
-            },
-            "build_config": {
-              "input_shape": [
-                null,
-                126
-              ]
             }
           },
           {
@@ -134,12 +117,6 @@
               "gamma_regularizer": null,
               "beta_constraint": null,
               "gamma_constraint": null
-            },
-            "build_config": {
-              "input_shape": [
-                null,
-                256
-              ]
             }
           },
           {
@@ -151,12 +128,6 @@
               "rate": 0.5,
               "noise_shape": null,
               "seed": null
-            },
-            "build_config": {
-              "input_shape": [
-                null,
-                256
-              ]
             }
           },
           {
@@ -178,22 +149,11 @@
                 "class_name": "Zeros",
                 "config": {}
               },
-              "kernel_regularizer": {
-                "class_name": "L2",
-                "config": {
-                  "l2": 0.0010000000474974513
-                }
-              },
+              "kernel_regularizer": null,
               "bias_regularizer": null,
               "activity_regularizer": null,
               "kernel_constraint": null,
               "bias_constraint": null
-            },
-            "build_config": {
-              "input_shape": [
-                null,
-                256
-              ]
             }
           },
           {
@@ -229,12 +189,6 @@
               "gamma_regularizer": null,
               "beta_constraint": null,
               "gamma_constraint": null
-            },
-            "build_config": {
-              "input_shape": [
-                null,
-                128
-              ]
             }
           },
           {
@@ -246,12 +200,6 @@
               "rate": 0.4,
               "noise_shape": null,
               "seed": null
-            },
-            "build_config": {
-              "input_shape": [
-                null,
-                128
-              ]
             }
           },
           {
@@ -278,12 +226,6 @@
               "activity_regularizer": null,
               "kernel_constraint": null,
               "bias_constraint": null
-            },
-            "build_config": {
-              "input_shape": [
-                null,
-                128
-              ]
             }
           },
           {
@@ -319,12 +261,6 @@
               "gamma_regularizer": null,
               "beta_constraint": null,
               "gamma_constraint": null
-            },
-            "build_config": {
-              "input_shape": [
-                null,
-                64
-              ]
             }
           },
           {
@@ -336,12 +272,6 @@
               "rate": 0.3,
               "noise_shape": null,
               "seed": null
-            },
-            "build_config": {
-              "input_shape": [
-                null,
-                64
-              ]
             }
           },
           {
@@ -368,12 +298,6 @@
               "activity_regularizer": null,
               "kernel_constraint": null,
               "bias_constraint": null
-            },
-            "build_config": {
-              "input_shape": [
-                null,
-                64
-              ]
             }
           }
         ]
