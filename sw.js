@@ -1,5 +1,5 @@
 // BISINDO Translator Service Worker
-const CACHE_NAME = 'bisindo-cache-v3';
+const CACHE_NAME = 'bisindo-cache-v4';
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',
