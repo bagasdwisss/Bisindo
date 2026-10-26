@@ -525,19 +525,15 @@ BISINDO Translator adalah proyek Tugas Akhir yang membangun sistem penerjemah ba
 - Mekanisme stabilisasi prediksi yang cukup sophistocated
 - Dua model spesialis dengan arsitektur berbeda
 
-### Saran Pengembangan Selanjutnya
+### Saran Pengembangan Selanjutnya (4 Pilar Peningkatan Utama)
 
-| Prioritas | Saran | Dampak |
-|-----------|-------|--------|
-| 🔴 Tinggi | Tambah lebih banyak data abjad → akurasi abjad masih 76% | Akurasi naik signifikan |
-| 🔴 Tinggi | Data augmentation (rotasi, brightness) untuk robustness | Tahan kondisi cahaya berbeda |
-| 🟡 Sedang | Gunakan LSTM/GRU untuk gestur dinamis (gerakan) | Fitur baru |
-| 🟡 Sedang | Tambah Text-to-Speech (TTS) sebagai output suara | UX lebih baik |
-| 🟡 Sedang | Buat config file (`config.yaml`) untuk path & hyperparameter | Maintainability |
-| 🟢 Rendah | Deploy ke cloud (Streamlit Cloud / Hugging Face Spaces) | Akses publik |
-| 🟢 Rendah | Tambah fitur ekspor kalimat (copy to clipboard / download) | UX lebih lengkap |
-| 🟢 Rendah | Tambah unit test untuk fungsi `process_landmarks` | Kualitas kode |
+| Pilar | Fokus Peningkatan | Solusi Teknis | Dampak Akademik & Praktis |
+|---|---|---|---|
+| **1. Model AI & CV** | Gestur Dinamis & Konteks Spasial Tubuh | Migrasi ke arsitektur temporal **LSTM/GRU** (20–30 frames sliding window) & integrasi **MediaPipe Holistic/Pose** | Mengenali isyarat kata yang memiliki lintasan gerak dan membedakan posisi tangan (dada vs dahi) |
+| **2. NLP & Bahasa** | Rekonstruksi Tata Bahasa & Smoothing | Modul *NLP Grammar Smoothing* (aturan morfologis / model bahasa ringan) & *Dynamic Threshold Slider* | Mengubah kata isyarat mentah menjadi kalimat baku Bahasa Indonesia yang mengalir |
+| **3. UI/UX & Aksesibilitas** | Komunikasi 2 Arah & Aplikasi Mobile | Fitur **Speech-to-Text** untuk Teman Dengar, **Kamus Isyarat Visual interaktif**, dan **PWA (Progressive Web App)** | Sistem menjadi alat komunikasi inklusif 2 arah yang dapat di-install langsung di HP |
+| **4. Validasi Skripsi** | Evaluasi Kuantitatif & Kualitatif | Uji latensi komputasi (*Edge AI < 15ms*), *Robustness test* (3 variasi cahaya & jarak), serta *SUS Testing* | Memenuhi standar pengujian ilmiah dengan nilai A+ pada sidang Tugas Akhir |
 
 ---
 
-*Dokumen ini dibuat secara otomatis melalui analisis kode sumber. Terakhir diperbarui: 15 Mei 2026.*
+*Dokumen ini dibuat dan diperbarui secara komprehensif melalui analisis sistem dan arsitektur web modern TensorFlow.js.*

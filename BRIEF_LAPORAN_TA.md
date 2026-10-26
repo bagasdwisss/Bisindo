@@ -400,6 +400,48 @@ Untuk model kosakata: folder `training_results/`
 
 ---
 
+## ROADMAP & SARAN PENGEMBANGAN SISTEM (BAB V & MATERI SIDANG SKRIPSI)
+
+Berikut adalah 4 pilar peningkatan strategis yang dapat dicantumkan pada **BAB V (Saran)** serta disiapkan sebagai bahan argumentasi unggulan pada **Tanya-Jawab Sidang Skripsi**:
+
+### 1. Peningkatan Model AI & Computer Vision (Paling Krusial)
+* **Peralihan ke Model Sekuensial Temporal (LSTM / GRU / 1D-CNN)**:
+  * *Konteks Akademik*: Model saat ini bekerja berbasis *single-frame classification* (frame demi frame terpisah). Padahal, banyak kosakata BISINDO yang merupakan gestur dinamis berkesinambungan (gerakan dari detik awal ke detik akhir).
+  * *Solusi Pengembangan*: Menerapkan metode *sliding window* (misal 20–30 frame time-steps) yang diumpankan ke jaringan **LSTM (Long Short-Term Memory)** atau **Bi-directional GRU**. Model akan mampu mengenali gestur berdasarkan trayektori lintasan koordinat tangan sepanjang waktu.
+* **Integrasi Titik Tubuh & Pose (MediaPipe Holistic / Pose Fusion)**:
+  * *Konteks Akademik*: Normalisasi koordinat saat ini murni relatif terhadap pergelangan tangan (`wrist = landmark[0]`). Akibatnya, sistem memiliki kelemahan dalam membedakan gestur yang memiliki formasi jari serupa namun posisi anatomisnya berbeda (misal tangan di dahi vs tangan di dada).
+  * *Solusi Pengembangan*: Mengintegrasikan landmark wajah/tubuh (hidung, bahu kiri, bahu kanan) sebagai titik jangkar (*anchor point*) sehingga model memiliki konteks spasial terhadap tubuh pengguna.
+
+### 2. Peningkatan Pengolahan Bahasa (NLP & Grammar Smoothing)
+* **Rekonstruksi Tata Bahasa Isyarat ke Bahasa Lisan Baku**:
+  * *Konteks Akademik*: Bahasa Isyarat Indonesia (BISINDO) memiliki tata bahasa alami yang berbeda dengan Bahasa Indonesia lisan (kerap kali tanpa imbuhan *me-*, *di-*, *-kan* serta pola urutan kata topik-komentar atau Subjek-Objek-Predikat).
+  * *Solusi Pengembangan*: Menambahkan modul *NLP Post-Processing* (berbasis aturan linguistik atau model sekuens kecil) untuk menerjemahkan rangkaian isyarat mentah (misal: `"saya buku baca"`) menjadi kalimat bahasa Indonesia formal yang mengalir (misal: `"Saya sedang membaca buku."`).
+* **Ambang Batas Adaptif (Dynamic Confidence Filtering)**:
+  * Menyediakan fitur penyesuaian nilai ambang batas (*confidence threshold*) dan durasi tahan isyarat (*hold time*) secara dinamis agar pengguna pemula maupun mahir dapat berinteraksi dengan nyaman.
+
+### 3. Peningkatan Aksesibilitas & UI/UX
+* **Komunikasi Dua Arah (Bidirectional Translator: Dengar ⇄ Tuli)**:
+  * Mengubah sistem dari translator satu arah menjadi platform dialog inklusif. Teman Dengar dapat berbicara melalui mikrofon (ditranskripsi via *Speech-to-Text* secara real-time), dan sistem menampilkan kata kunci serta kartu isyarat visual untuk teman Tuli.
+* **Progressive Web App (PWA) & Offline Inference**:
+  * Menerapkan arsitektur PWA (*Service Worker* dan *Web App Manifest*) sehingga aplikasi dapat di-install langsung di layar utama smartphone (Android & iOS) layaknya aplikasi native tanpa Google Play Store, serta dapat memuat model secara instan melalui cache lokal.
+* **Kamus Referensi Isyarat Visual Terintegrasi**:
+  * Menyediakan katalog panduan visual interaktif untuk 26 abjad dan seluruh kosakata langsung di antarmuka web, memudahkan proses belajar bagi pengguna umum.
+
+### 4. Poin Penguatan untuk Laporan / Sidang Skripsi (Nilai Tambah A+)
+* **Evaluasi Performa Komputasi & Latensi (Edge AI vs Cloud)**:
+  * Mencantumkan tabel komparasi teknis antara eksekusi di server cloud vs eksekusi lokal di browser (*Client-side WebGL*):
+    - Waktu inferensi per frame: **< 15 ms** (setara 30–60 FPS).
+    - Biaya komputasi server: **0% (Serverless)**, tanpa risiko *server crash / Out of Memory*.
+* **Pengujian Ketahanan Sistem (Robustness Testing)**:
+  * Menguji performa deteksi pada 3 skenario lingkungan berbeda:
+    - Variasi intensitas pencahayaan (Terang ~300 lux, Redup ~50 lux, Backlight).
+    - Variasi jarak kamera ke pengguna (50 cm, 100 cm, 150 cm).
+    - Kompleksitas latar belakang (polos vs latar bergerak/ramai).
+* **Pengujian Pengguna Riil (System Usability Scale - SUS)**:
+  * Melibatkan responden dari komunitas Tuli / Gerkatin / SLB untuk mengisi kuesioner baku SUS (skala 0–100) sebagai bukti validasi empiris bahwa aplikasi layak dan mudah digunakan oleh target pengguna sesungguhnya.
+
+---
+
 ## INSTRUKSI PENGGUNAAN UNTUK CLAUDE WEB
 
 Ketika meminta bantuan penulisan laporan ke Claude Web, sertakan konteks ini dan instruksikan:
