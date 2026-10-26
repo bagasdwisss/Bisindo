@@ -610,13 +610,13 @@ function renderIllustratedSingleHand(ctx, points, cx, cy, scale, angle, isSecond
   ctx.restore();
 }
 
-// --- 6. Populate Visual Dictionary (Authentic Chart Illustrations & 3D Hands) ---
+// --- 6. Populate Visual Dictionary (Authentic Chart Illustrations & Vector Graphics) ---
 function populateVisualDictionary() {
   if (!state.landmarksDictionary) return;
 
   const { abjad, kosakata } = state.landmarksDictionary;
 
-  // 1. Populate 38 Kosakata (Anatomical Illustrated Hand Cards)
+  // 1. Populate 38 Kosakata (Standardized Illustrated Sign Cards)
   elements.dictKataGrid.innerHTML = '';
   state.labelsKosakata.forEach((kata) => {
     const data = kosakata[kata];
@@ -629,26 +629,19 @@ function populateVisualDictionary() {
       : `<span class="text-[9px] px-1.5 py-0.5 rounded font-semibold bg-brand-500/20 text-brand-400 border border-brand-500/30">1 Tangan</span>`;
 
     card.innerHTML = `
-      <div class="w-full flex items-center justify-between mb-2">
-        <span class="font-bold text-sm text-white group-hover:text-brand-400 transition-colors capitalize">${kata}</span>
+      <div class="w-full flex items-center justify-between mb-1.5">
+        <span class="font-bold text-sm text-brand-400 group-hover:text-brand-300 transition-colors capitalize">${kata}</span>
         ${twoHandsBadge}
       </div>
-      <div class="relative w-full aspect-[4/3] rounded-xl overflow-hidden bg-white/95 border border-gray-700/80 mb-2 flex items-center justify-center p-1 shadow-inner group-hover:scale-105 transition-transform">
-        <canvas class="dict-thumb-canvas w-full h-full" width="160" height="120"></canvas>
+      <div class="relative w-full aspect-[4/3] rounded-xl overflow-hidden bg-white/95 border border-gray-700/80 mb-2 flex items-center justify-center p-2 shadow-inner group-hover:scale-105 transition-transform">
+        <img src="assets/kosakata/${encodeURIComponent(kata)}.svg" alt="Kosakata ${kata}" class="w-full h-full object-contain filter drop-shadow-sm" loading="lazy" />
       </div>
-      <span class="text-[10px] text-gray-500 group-hover:text-gray-300 transition-colors">Pratinjau Detail</span>
+      <span class="text-[10px] text-gray-500 group-hover:text-gray-300 transition-colors">Lihat Detail</span>
     `;
-
-    // Render thumbnail in illustrated cartoon hand style
-    const thumbCanvas = card.querySelector('.dict-thumb-canvas');
-    if (data && thumbCanvas) {
-      const tctx = thumbCanvas.getContext('2d');
-      drawHandSkeleton(tctx, data.hand1, data.hand2, 160, 120, 0, { animate: false, scale: 1.6, lightBg: true });
-    }
 
     // Card click opens Detail
     card.addEventListener('click', () => {
-      openGestureDetail(data || { name: kata, type: 'kata', twoHands: false, hand1: null, hand2: null });
+      openGestureDetail(data || { name: kata, type: 'kata', twoHands: data ? data.twoHands : false, hand1: null, hand2: null });
     });
 
     elements.dictKataGrid.appendChild(card);
@@ -697,7 +690,7 @@ function filterDictionary(query) {
   });
 }
 
-// --- 7. Gesture Detail Viewer (Official Chart Image for Abjad & 3D Animated for Kosakata) ---
+// --- 7. Gesture Detail Viewer (Official Chart Image for Abjad & Illustrated Vector for Kosakata) ---
 function openGestureDetail(gestureData) {
   state.activeDetailGesture = gestureData;
 
@@ -705,47 +698,31 @@ function openGestureDetail(gestureData) {
   elements.detailGestureTypeBadge.innerText = gestureData.type === 'abjad' ? 'Huruf Abjad BISINDO' : 'Kosakata Kata BISINDO';
   elements.detailGestureHandsBadge.innerText = gestureData.twoHands ? '2 Tangan (Kedua Tangan)' : '1 Tangan (Tangan Utama)';
 
-  elements.detailGestureDesc.innerText = gestureData.twoHands
-    ? `Isyarat "${gestureData.name}" menggunakan kedua tangan. Posisikan kedua tangan Anda sejajar di depan kamera dan tahan gerakan selama 0.6 detik.`
-    : `Isyarat "${gestureData.name}" menggunakan satu tangan utama. Bentuk posisi tangan Anda sesuai panduan visual di atas dan tahan selama 0.6 detik.`;
-
-  elements.modalGestureDetail.classList.remove('hidden');
-
   // Cancel any existing animation frame
   if (state.detailAnimFrameId) {
     cancelAnimationFrame(state.detailAnimFrameId);
     state.detailAnimFrameId = null;
   }
 
-  // If Abjad: Display the high-resolution official chart image!
+  // Display clear illustrated graphic in both modes!
+  elements.detailGestureImageBox.classList.remove('hidden');
+  elements.detailGestureCanvas.classList.add('hidden');
+
   if (gestureData.type === 'abjad') {
-    elements.detailGestureImageBox.classList.remove('hidden');
-    elements.detailGestureCanvas.classList.add('hidden');
     elements.detailGestureImg.src = `assets/abjad/${gestureData.name}.png`;
     elements.detailGestureImg.alt = `Bentuk tangan isyarat huruf ${gestureData.name}`;
+    elements.detailGestureDesc.innerText = gestureData.twoHands
+      ? `Isyarat huruf "${gestureData.name}" menggunakan kedua tangan. Posisikan kedua tangan Anda sejajar di depan kamera dan tahan gerakan selama 0.6 detik.`
+      : `Isyarat huruf "${gestureData.name}" menggunakan satu tangan utama. Bentuk posisi jari dan tangan Anda sesuai panduan visual di atas dan tahan selama 0.6 detik.`;
   } else {
-    // If Kosakata: Display the 3D rotating illustrated anatomical hand!
-    elements.detailGestureImageBox.classList.add('hidden');
-    elements.detailGestureCanvas.classList.remove('hidden');
-
-    function animateDetail(time) {
-      if (!state.activeDetailGesture || elements.modalGestureDetail.classList.contains('hidden')) return;
-
-      drawHandSkeleton(
-        detailCanvasCtx,
-        state.activeDetailGesture.hand1,
-        state.activeDetailGesture.hand2,
-        280,
-        230,
-        time,
-        { animate: true, scale: 1.65, lightBg: true }
-      );
-
-      state.detailAnimFrameId = requestAnimationFrame(animateDetail);
-    }
-
-    state.detailAnimFrameId = requestAnimationFrame(animateDetail);
+    elements.detailGestureImg.src = `assets/kosakata/${encodeURIComponent(gestureData.name)}.svg`;
+    elements.detailGestureImg.alt = `Bentuk tangan isyarat kosakata ${gestureData.name}`;
+    elements.detailGestureDesc.innerText = gestureData.twoHands
+      ? `Isyarat kosakata "${gestureData.name}" menggunakan kedua tangan. Ikuti arah gerakan dan posisi tangan sesuai ilustrasi resmi di atas, lalu tahan di depan kamera selama 0.6 detik.`
+      : `Isyarat kosakata "${gestureData.name}" menggunakan satu tangan utama. Ikuti arah panah gerakan pada ilustrasi resmi di atas dan tahan posisi tangan Anda di depan kamera selama 0.6 detik.`;
   }
+
+  elements.modalGestureDetail.classList.remove('hidden');
 }
 
 function closeGestureDetail() {
@@ -870,8 +847,13 @@ function setupSpeechRecognition() {
     if (recognizedInDict.size > 0) {
       recognizedInDict.forEach((item) => {
         const tag = document.createElement('span');
-        tag.className = 'px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30';
-        tag.innerText = `🤟 Isyarat: ${item}`;
+        tag.className = 'px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 cursor-pointer hover:bg-emerald-500/30 transition-all flex items-center gap-1.5 shadow-sm';
+        tag.innerHTML = `🤟 Isyarat: <b class="capitalize">${item}</b> <span class="text-[10px] text-emerald-300 underline">Lihat</span>`;
+        tag.title = `Klik untuk melihat panduan visual isyarat "${item}"`;
+        tag.addEventListener('click', () => {
+          const dictData = state.landmarksDictionary && state.landmarksDictionary.kosakata ? state.landmarksDictionary.kosakata[item] : null;
+          openGestureDetail(dictData || { name: item, type: 'kata', twoHands: false });
+        });
         elements.speechDetectedTags.appendChild(tag);
       });
     }

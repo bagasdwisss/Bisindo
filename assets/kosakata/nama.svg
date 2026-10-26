@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 220" width="100%" height="100%">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#3b82f6" />
+    </marker>
+    <marker id="arrow-green" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#10b981" />
+    </marker>
+    <filter id="shadow" x="-5%" y="-5%" width="110%" height="110%">
+      <feDropShadow dx="0" dy="3" stdDeviation="4" flood-color="#000000" flood-opacity="0.08" />
+    </filter>
+  </defs>
+  <!-- Background Card -->
+  <rect width="296" height="216" x="2" y="2" rx="16" fill="#ffffff" stroke="#e2e8f0" stroke-width="2" />
+  
+  <!-- Illustration Elements -->
+  <g filter="url(#shadow)">
+    
+  <!-- Left hand 2 fingers -->
+  <path d="M 80 150 L 120 120 L 160 100 C 168 95 172 105 165 112 L 125 135 Z" fill="#ea9f71" stroke="#231815" stroke-width="4" stroke-linecap="round" />
+  <!-- Right hand 2 fingers touching -->
+  <path d="M 220 150 L 180 120 L 140 100 C 132 95 128 105 135 112 L 175 135 Z" fill="#df9266" stroke="#231815" stroke-width="4" stroke-linecap="round" />
+  <!-- Touch impact sparkle -->
+  <circle cx="150" cy="106" r="8" fill="#10b981" opacity="0.4" />
+  <text x="150" y="200" font-family="sans-serif" font-size="12" font-weight="bold" fill="#64748b" text-anchor="middle">Dua jari kedua tangan saling mengetuk</text>
+
+  </g>
+</svg>
