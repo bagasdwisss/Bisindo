@@ -405,11 +405,14 @@
         </button>
       </div>
 
-      <!-- 3D Canvas Visualizer -->
-      <div class="relative bg-gradient-to-b from-gray-950 via-gray-900 to-gray-950 p-6 flex flex-col items-center justify-center border-b border-gray-800 overflow-hidden">
+      <!-- Visual Display (Image or Canvas) -->
+      <div class="relative bg-gradient-to-b from-gray-950 via-gray-900 to-gray-950 p-6 flex flex-col items-center justify-center border-b border-gray-800 overflow-hidden min-h-[260px]">
+        <div id="detail-gesture-image-box" class="w-full max-w-[260px] aspect-square flex items-center justify-center p-4 rounded-2xl bg-white/95 shadow-inner hidden border border-gray-300">
+          <img id="detail-gesture-img" src="" alt="Gesture" class="max-h-52 w-auto object-contain filter drop-shadow-sm" />
+        </div>
         <canvas id="detail-gesture-canvas" width="280" height="230" class="rounded-2xl"></canvas>
-        <span class="absolute bottom-2 text-[10px] text-gray-500 font-mono tracking-wider">
-          ✦ Rotasi 3D Otomatis Berdasarkan Dataset ✦
+        <span id="detail-gesture-footer-hint" class="absolute bottom-2 text-[10px] text-gray-500 font-mono tracking-wider">
+          ✦ Visualisasi Bentuk Tangan Resmi BISINDO ✦
         </span>
       </div>
 

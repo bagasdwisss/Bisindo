@@ -146,6 +146,8 @@ const elements = {
   // Modal 1B: Detail Gesture 3D Viewer
   modalGestureDetail: document.getElementById('modal-gesture-detail'),
   btnCloseGestureDetail: document.getElementById('btn-close-gesture-detail'),
+  detailGestureImageBox: document.getElementById('detail-gesture-image-box'),
+  detailGestureImg: document.getElementById('detail-gesture-img'),
   detailGestureCanvas: document.getElementById('detail-gesture-canvas'),
   detailGestureTitle: document.getElementById('detail-gesture-title'),
   detailGestureDesc: document.getElementById('detail-gesture-desc'),
@@ -459,39 +461,45 @@ async function predictGesturesAsync(multiHandLandmarks) {
   }
 }
 
-// --- 5. Holographic Vector Hand Skeleton Renderer ---
+// --- 5. Illustrated Anatomical Hand Renderer (Matching Official BISINDO Graphic Style) ---
 function drawHandSkeleton(ctx, hand1Coords, hand2Coords, width, height, time = 0, options = {}) {
   ctx.clearRect(0, 0, width, height);
 
-  // Subtle dark gradient background
-  const bgGrad = ctx.createRadialGradient(width / 2, height / 2, 10, width / 2, height / 2, width * 0.7);
-  bgGrad.addColorStop(0, '#0f172a');
-  bgGrad.addColorStop(1, '#020617');
-  ctx.fillStyle = bgGrad;
-  ctx.fillRect(0, 0, width, height);
-
-  const hasTwoHands = Boolean(hand2Coords && hand2Coords.length === 21);
-  const scale = (options.scale || 1.6) * Math.min(width, height);
-
-  // Gentle 3D perspective rotation angle
-  const animAngle = options.animate ? Math.sin(time * 0.002) * 0.22 : (options.angle || 0);
-
-  // Draw Hand 1 (Primary - Emerald)
-  if (hand1Coords && hand1Coords.length === 21) {
-    const cx1 = hasTwoHands ? width * 0.32 : width * 0.5;
-    const cy1 = height * 0.78;
-    renderSingleHand(ctx, hand1Coords, cx1, cy1, scale, animAngle, '#10b981', '#34d399');
+  // Clean, high-contrast flashcard background
+  const isLightBg = options.lightBg !== false;
+  if (isLightBg) {
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, width, height);
+  } else {
+    const bgGrad = ctx.createRadialGradient(width / 2, height / 2, 10, width / 2, height / 2, width * 0.7);
+    bgGrad.addColorStop(0, '#1e293b');
+    bgGrad.addColorStop(1, '#090d16');
+    ctx.fillStyle = bgGrad;
+    ctx.fillRect(0, 0, width, height);
   }
 
-  // Draw Hand 2 (Secondary - Indigo/Purple)
+  const hasTwoHands = Boolean(hand2Coords && hand2Coords.length === 21);
+  const scale = (options.scale || 1.65) * Math.min(width, height);
+
+  // Subtle 3D breathing/perspective rotation
+  const animAngle = options.animate ? Math.sin(time * 0.002) * 0.20 : (options.angle || 0);
+
+  // Draw Hand 1 (Primary Hand)
+  if (hand1Coords && hand1Coords.length === 21) {
+    const cx1 = hasTwoHands ? width * 0.32 : width * 0.5;
+    const cy1 = height * 0.80;
+    renderIllustratedSingleHand(ctx, hand1Coords, cx1, cy1, scale, animAngle, false);
+  }
+
+  // Draw Hand 2 (Secondary Hand for 2-handed signs)
   if (hasTwoHands) {
     const cx2 = width * 0.68;
-    const cy2 = height * 0.78;
-    renderSingleHand(ctx, hand2Coords, cx2, cy2, scale, -animAngle, '#818cf8', '#a78bfa');
+    const cy2 = height * 0.80;
+    renderIllustratedSingleHand(ctx, hand2Coords, cx2, cy2, scale, -animAngle, true);
   }
 }
 
-function renderSingleHand(ctx, points, cx, cy, scale, angle, primaryColor, jointColor) {
+function renderIllustratedSingleHand(ctx, points, cx, cy, scale, angle, isSecondHand) {
   const projected = [];
   const cosA = Math.cos(angle);
   const sinA = Math.sin(angle);
@@ -501,59 +509,119 @@ function renderSingleHand(ctx, points, cx, cy, scale, angle, primaryColor, joint
     const [dx, dy, dz] = points[i];
     const rotX = dx * cosA - dz * sinA;
     const rotZ = dx * sinA + dz * cosA;
-    const persp = 1 / (1 - rotZ * 0.6);
+    const persp = 1 / (1 - rotZ * 0.5);
 
     const px = cx + rotX * scale * persp;
-    const py = cy + dy * scale * persp; // dy is negative upwards
+    const py = cy + dy * scale * persp; // dy is negative upwards in MediaPipe
     projected.push({ x: px, y: py });
   }
 
-  // Draw glowing bones
-  ctx.save();
-  ctx.shadowColor = primaryColor;
-  ctx.shadowBlur = 8;
-  ctx.lineWidth = 2.5;
-  ctx.strokeStyle = primaryColor;
-  ctx.lineCap = 'round';
-  ctx.lineJoin = 'round';
+  // Authentic skin tones matching BISINDO illustration palette
+  const skinColor = isSecondHand ? '#df9266' : '#ea9f71';
+  const shadowSkin = isSecondHand ? '#c77d52' : '#d2875b';
+  const outlineColor = '#241711';
 
+  // 1. Solid Palm Polygon
+  const palmIndices = [0, 1, 2, 5, 9, 13, 17, 0];
+  ctx.save();
   ctx.beginPath();
-  for (const [i, j] of HAND_CONNECTIONS_MAP) {
-    ctx.moveTo(projected[i].x, projected[i].y);
-    ctx.lineTo(projected[j].x, projected[j].y);
+  ctx.moveTo(projected[0].x, projected[0].y);
+  for (let k = 1; k < palmIndices.length; k++) {
+    const pt = projected[palmIndices[k]];
+    ctx.lineTo(pt.x, pt.y);
   }
+  ctx.closePath();
+  ctx.fillStyle = skinColor;
+  ctx.fill();
+  ctx.lineWidth = 3.5;
+  ctx.strokeStyle = outlineColor;
+  ctx.lineJoin = 'round';
   ctx.stroke();
   ctx.restore();
 
-  // Draw joint nodes
-  const fingerTips = new Set([4, 8, 12, 16, 20]);
-  for (let i = 0; i < 21; i++) {
-    const pt = projected[i];
-    const isTip = fingerTips.has(i);
+  // 2. Thick Fleshy Fingers (Outline pass first, then skin fill)
+  const fingers = [
+    [0, 1, 2, 3, 4],       // Thumb
+    [0, 5, 6, 7, 8],       // Index
+    [5, 9, 10, 11, 12],    // Middle
+    [9, 13, 14, 15, 16],   // Ring
+    [13, 17, 18, 19, 20]   // Pinky
+  ];
 
-    ctx.save();
-    ctx.beginPath();
-    ctx.arc(pt.x, pt.y, isTip ? 4 : 2.5, 0, Math.PI * 2);
-    ctx.fillStyle = isTip ? '#ffffff' : jointColor;
-    ctx.shadowColor = isTip ? '#ffffff' : jointColor;
-    ctx.shadowBlur = isTip ? 10 : 4;
-    ctx.fill();
-    ctx.restore();
+  const widths = [15, 13, 11, 9]; // Tapering joint thickness
+
+  // Finger Outlines
+  ctx.save();
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.strokeStyle = outlineColor;
+
+  for (const finger of fingers) {
+    for (let s = 1; s < finger.length; s++) {
+      const pA = projected[finger[s - 1]];
+      const pB = projected[finger[s]];
+      const w = widths[s - 1] + 5;
+      ctx.lineWidth = w;
+      ctx.beginPath();
+      ctx.moveTo(pA.x, pA.y);
+      ctx.lineTo(pB.x, pB.y);
+      ctx.stroke();
+    }
   }
+  ctx.restore();
+
+  // Finger Skin Fill
+  ctx.save();
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.strokeStyle = skinColor;
+
+  for (const finger of fingers) {
+    for (let s = 1; s < finger.length; s++) {
+      const pA = projected[finger[s - 1]];
+      const pB = projected[finger[s]];
+      const w = widths[s - 1];
+      ctx.lineWidth = w;
+      ctx.beginPath();
+      ctx.moveTo(pA.x, pA.y);
+      ctx.lineTo(pB.x, pB.y);
+      ctx.stroke();
+    }
+  }
+
+  // Fingernail and Knuckle accents
+  ctx.fillStyle = shadowSkin;
+  for (const finger of fingers) {
+    const tip = projected[finger[finger.length - 1]];
+    ctx.beginPath();
+    ctx.arc(tip.x, tip.y, 3, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Subtle knuckle crease
+    if (finger.length >= 4) {
+      const mid = projected[finger[2]];
+      ctx.strokeStyle = outlineColor;
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.arc(mid.x, mid.y, 2.5, 0, Math.PI);
+      ctx.stroke();
+    }
+  }
+  ctx.restore();
 }
 
-// --- 6. Populate Visual Dictionary (with Skeleton Canvases) ---
+// --- 6. Populate Visual Dictionary (Authentic Chart Illustrations & 3D Hands) ---
 function populateVisualDictionary() {
   if (!state.landmarksDictionary) return;
 
   const { abjad, kosakata } = state.landmarksDictionary;
 
-  // 1. Populate 38 Kosakata
+  // 1. Populate 38 Kosakata (Anatomical Illustrated Hand Cards)
   elements.dictKataGrid.innerHTML = '';
   state.labelsKosakata.forEach((kata) => {
     const data = kosakata[kata];
     const card = document.createElement('div');
-    card.className = 'dict-card-kata p-3 rounded-2xl bg-gray-900 border border-gray-800 hover:border-brand-500/60 hover:bg-gray-800/60 transition-all cursor-pointer flex flex-col items-center group shadow-md';
+    card.className = 'dict-card-kata p-3 rounded-2xl bg-gray-900 border border-gray-800 hover:border-brand-500/70 hover:bg-gray-800/70 transition-all cursor-pointer flex flex-col items-center group shadow-md';
     card.setAttribute('data-name', kata.toLowerCase());
 
     const twoHandsBadge = data && data.twoHands
@@ -565,20 +633,20 @@ function populateVisualDictionary() {
         <span class="font-bold text-sm text-white group-hover:text-brand-400 transition-colors capitalize">${kata}</span>
         ${twoHandsBadge}
       </div>
-      <div class="relative w-full aspect-[4/3] rounded-xl overflow-hidden bg-gray-950 border border-gray-800/80 mb-2 flex items-center justify-center">
+      <div class="relative w-full aspect-[4/3] rounded-xl overflow-hidden bg-white/95 border border-gray-700/80 mb-2 flex items-center justify-center p-1 shadow-inner group-hover:scale-105 transition-transform">
         <canvas class="dict-thumb-canvas w-full h-full" width="160" height="120"></canvas>
       </div>
-      <span class="text-[10px] text-gray-500 group-hover:text-gray-400 transition-colors">Klik untuk Pratinjau 3D</span>
+      <span class="text-[10px] text-gray-500 group-hover:text-gray-300 transition-colors">Pratinjau Detail</span>
     `;
 
-    // Render thumbnail skeleton
+    // Render thumbnail in illustrated cartoon hand style
     const thumbCanvas = card.querySelector('.dict-thumb-canvas');
     if (data && thumbCanvas) {
       const tctx = thumbCanvas.getContext('2d');
-      drawHandSkeleton(tctx, data.hand1, data.hand2, 160, 120, 0, { animate: false, scale: 1.55 });
+      drawHandSkeleton(tctx, data.hand1, data.hand2, 160, 120, 0, { animate: false, scale: 1.6, lightBg: true });
     }
 
-    // Card click opens 3D Inspector Detail
+    // Card click opens Detail
     card.addEventListener('click', () => {
       openGestureDetail(data || { name: kata, type: 'kata', twoHands: false, hand1: null, hand2: null });
     });
@@ -586,12 +654,12 @@ function populateVisualDictionary() {
     elements.dictKataGrid.appendChild(card);
   });
 
-  // 2. Populate 26 Abjad (A-Z)
+  // 2. Populate 26 Abjad (Official Illustrated Chart Graphics)
   elements.dictAbjadGrid.innerHTML = '';
   state.labelsAbjad.forEach((huruf) => {
     const data = abjad[huruf];
     const card = document.createElement('div');
-    card.className = 'dict-card-abjad p-3 rounded-2xl bg-gray-900 border border-gray-800 hover:border-purple-500/60 hover:bg-gray-800/60 transition-all cursor-pointer flex flex-col items-center group shadow-md';
+    card.className = 'dict-card-abjad p-3 rounded-2xl bg-gray-900 border border-gray-800 hover:border-purple-500/70 hover:bg-gray-800/70 transition-all cursor-pointer flex flex-col items-center group shadow-md';
     card.setAttribute('data-name', huruf.toLowerCase());
 
     const twoHandsBadge = data && data.twoHands
@@ -599,22 +667,15 @@ function populateVisualDictionary() {
       : `<span class="text-[9px] px-1.5 py-0.5 rounded font-semibold bg-purple-500/20 text-purple-400 border border-purple-500/30">1 Tangan</span>`;
 
     card.innerHTML = `
-      <div class="w-full flex items-center justify-between mb-2">
-        <span class="font-extrabold text-lg text-purple-400 group-hover:text-purple-300 transition-colors">${huruf}</span>
+      <div class="w-full flex items-center justify-between mb-1.5">
+        <span class="font-extrabold text-base text-purple-400 group-hover:text-purple-300 transition-colors">Huruf ${huruf}</span>
         ${twoHandsBadge}
       </div>
-      <div class="relative w-full aspect-[4/3] rounded-xl overflow-hidden bg-gray-950 border border-gray-800/80 mb-2 flex items-center justify-center">
-        <canvas class="dict-thumb-canvas w-full h-full" width="160" height="120"></canvas>
+      <div class="relative w-full aspect-[4/3] rounded-xl overflow-hidden bg-white/95 border border-gray-700/80 mb-2 flex items-center justify-center p-2 shadow-inner group-hover:scale-105 transition-transform">
+        <img src="assets/abjad/${huruf}.png" alt="Huruf ${huruf}" class="w-full h-full object-contain filter drop-shadow-sm" loading="lazy" />
       </div>
-      <span class="text-[10px] text-gray-500 group-hover:text-gray-400 transition-colors">Pratinjau 3D</span>
+      <span class="text-[10px] text-gray-500 group-hover:text-gray-300 transition-colors">Lihat Detail</span>
     `;
-
-    // Render thumbnail skeleton
-    const thumbCanvas = card.querySelector('.dict-thumb-canvas');
-    if (data && thumbCanvas) {
-      const tctx = thumbCanvas.getContext('2d');
-      drawHandSkeleton(tctx, data.hand1, data.hand2, 160, 120, 0, { animate: false, scale: 1.55 });
-    }
 
     card.addEventListener('click', () => {
       openGestureDetail(data || { name: huruf, type: 'abjad', twoHands: false, hand1: null, hand2: null });
@@ -636,40 +697,55 @@ function filterDictionary(query) {
   });
 }
 
-// --- 7. Gesture Detail 3D Hologram Modal Animation ---
+// --- 7. Gesture Detail Viewer (Official Chart Image for Abjad & 3D Animated for Kosakata) ---
 function openGestureDetail(gestureData) {
   state.activeDetailGesture = gestureData;
 
-  elements.detailGestureTitle.innerText = gestureData.name;
-  elements.detailGestureTypeBadge.innerText = gestureData.type === 'abjad' ? 'Huruf Abjad' : 'Kosakata Kata';
+  elements.detailGestureTitle.innerText = gestureData.type === 'abjad' ? `Huruf ${gestureData.name}` : gestureData.name;
+  elements.detailGestureTypeBadge.innerText = gestureData.type === 'abjad' ? 'Huruf Abjad BISINDO' : 'Kosakata Kata BISINDO';
   elements.detailGestureHandsBadge.innerText = gestureData.twoHands ? '2 Tangan (Kedua Tangan)' : '1 Tangan (Tangan Utama)';
 
   elements.detailGestureDesc.innerText = gestureData.twoHands
     ? `Isyarat "${gestureData.name}" menggunakan kedua tangan. Posisikan kedua tangan Anda sejajar di depan kamera dan tahan gerakan selama 0.6 detik.`
-    : `Isyarat "${gestureData.name}" menggunakan satu tangan utama. Angkat tangan Anda di depan kamera dengan formasi jari sesuai visualisasi 3D di atas.`;
+    : `Isyarat "${gestureData.name}" menggunakan satu tangan utama. Bentuk posisi tangan Anda sesuai panduan visual di atas dan tahan selama 0.6 detik.`;
 
   elements.modalGestureDetail.classList.remove('hidden');
 
-  // Start smooth 3D rotation animation loop for this gesture
-  if (state.detailAnimFrameId) cancelAnimationFrame(state.detailAnimFrameId);
+  // Cancel any existing animation frame
+  if (state.detailAnimFrameId) {
+    cancelAnimationFrame(state.detailAnimFrameId);
+    state.detailAnimFrameId = null;
+  }
 
-  function animateDetail(time) {
-    if (!state.activeDetailGesture || elements.modalGestureDetail.classList.contains('hidden')) return;
+  // If Abjad: Display the high-resolution official chart image!
+  if (gestureData.type === 'abjad') {
+    elements.detailGestureImageBox.classList.remove('hidden');
+    elements.detailGestureCanvas.classList.add('hidden');
+    elements.detailGestureImg.src = `assets/abjad/${gestureData.name}.png`;
+    elements.detailGestureImg.alt = `Bentuk tangan isyarat huruf ${gestureData.name}`;
+  } else {
+    // If Kosakata: Display the 3D rotating illustrated anatomical hand!
+    elements.detailGestureImageBox.classList.add('hidden');
+    elements.detailGestureCanvas.classList.remove('hidden');
 
-    drawHandSkeleton(
-      detailCanvasCtx,
-      state.activeDetailGesture.hand1,
-      state.activeDetailGesture.hand2,
-      280,
-      230,
-      time,
-      { animate: true, scale: 1.6 }
-    );
+    function animateDetail(time) {
+      if (!state.activeDetailGesture || elements.modalGestureDetail.classList.contains('hidden')) return;
+
+      drawHandSkeleton(
+        detailCanvasCtx,
+        state.activeDetailGesture.hand1,
+        state.activeDetailGesture.hand2,
+        280,
+        230,
+        time,
+        { animate: true, scale: 1.65, lightBg: true }
+      );
+
+      state.detailAnimFrameId = requestAnimationFrame(animateDetail);
+    }
 
     state.detailAnimFrameId = requestAnimationFrame(animateDetail);
   }
-
-  state.detailAnimFrameId = requestAnimationFrame(animateDetail);
 }
 
 function closeGestureDetail() {

@@ -54,10 +54,11 @@ self.addEventListener('fetch', (event) => {
         ) {
           return networkResponse;
         }
-        // Cache weight files and scripts
+        // Cache weight files, assets, and scripts
         if (
           event.request.url.includes('/models/') ||
-          event.request.url.includes('/js/')
+          event.request.url.includes('/js/') ||
+          event.request.url.includes('/assets/')
         ) {
           const responseToCache = networkResponse.clone();
           caches.open(CACHE_NAME).then((cache) => {
