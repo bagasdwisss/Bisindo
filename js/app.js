@@ -634,7 +634,7 @@ function populateVisualDictionary() {
         ${twoHandsBadge}
       </div>
       <div class="relative w-full aspect-[4/3] rounded-xl overflow-hidden bg-white/95 border border-gray-700/80 mb-2 flex items-center justify-center p-2 shadow-inner group-hover:scale-105 transition-transform">
-        <img src="assets/kosakata/${encodeURIComponent(kata)}.svg" alt="Kosakata ${kata}" class="w-full h-full object-contain filter drop-shadow-sm" loading="lazy" />
+        <img src="assets/kosakata/${encodeURIComponent(kata)}.png" alt="Kosakata ${kata}" class="w-full h-full object-contain filter drop-shadow-sm" loading="lazy" />
       </div>
       <span class="text-[10px] text-gray-500 group-hover:text-gray-300 transition-colors">Lihat Detail</span>
     `;
@@ -715,7 +715,7 @@ function openGestureDetail(gestureData) {
       ? `Isyarat huruf "${gestureData.name}" menggunakan kedua tangan. Posisikan kedua tangan Anda sejajar di depan kamera dan tahan gerakan selama 0.6 detik.`
       : `Isyarat huruf "${gestureData.name}" menggunakan satu tangan utama. Bentuk posisi jari dan tangan Anda sesuai panduan visual di atas dan tahan selama 0.6 detik.`;
   } else {
-    elements.detailGestureImg.src = `assets/kosakata/${encodeURIComponent(gestureData.name)}.svg`;
+    elements.detailGestureImg.src = `assets/kosakata/${encodeURIComponent(gestureData.name)}.png`;
     elements.detailGestureImg.alt = `Bentuk tangan isyarat kosakata ${gestureData.name}`;
     elements.detailGestureDesc.innerText = gestureData.twoHands
       ? `Isyarat kosakata "${gestureData.name}" menggunakan kedua tangan. Ikuti arah gerakan dan posisi tangan sesuai ilustrasi resmi di atas, lalu tahan di depan kamera selama 0.6 detik.`
