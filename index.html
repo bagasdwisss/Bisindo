@@ -323,17 +323,22 @@
 
   <!-- ==================== MODAL 1: KAMUS ISYARAT (DICTIONARY) ==================== -->
   <div id="modal-dictionary" class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm hidden p-4">
-    <div class="bg-gray-900 border border-gray-800 rounded-2xl max-w-2xl w-full max-h-[85vh] flex flex-col shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+    <div class="bg-gray-900 border border-gray-800 rounded-2xl max-w-4xl w-full max-h-[90vh] flex flex-col shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
       
       <!-- Modal Header -->
       <div class="p-4 sm:p-5 border-b border-gray-800 flex items-center justify-between">
         <div class="flex items-center space-x-2.5">
-          <div class="w-8 h-8 rounded-lg bg-purple-500/20 text-purple-400 flex items-center justify-center">
-            <i data-lucide="book-open" class="w-4 h-4"></i>
+          <div class="w-9 h-9 rounded-xl bg-purple-500/20 text-purple-400 flex items-center justify-center shadow-sm">
+            <i data-lucide="book-open" class="w-5 h-5"></i>
           </div>
           <div>
-            <h3 class="text-base font-bold text-white">Kamus Referensi BISINDO</h3>
-            <p class="text-xs text-gray-400">Daftar kosakata dan abjad yang dikenali oleh model AI</p>
+            <h3 class="text-base font-bold text-white flex items-center gap-2">
+              Kamus Visual Isyarat BISINDO
+              <span class="text-[10px] px-2 py-0.5 rounded-full bg-brand-500/20 text-brand-400 font-semibold border border-brand-500/30">
+                3D Hologram
+              </span>
+            </h3>
+            <p class="text-xs text-gray-400">Bentuk tangan asli dari dataset yang divisualisasikan secara modern & interaktif</p>
           </div>
         </div>
         <button id="btn-close-dictionary" class="text-gray-400 hover:text-white p-1 rounded-lg hover:bg-gray-800 transition-colors">
@@ -344,10 +349,10 @@
       <!-- Tab Buttons & Search -->
       <div class="p-4 border-b border-gray-800 bg-gray-950/60 flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between">
         <div class="flex rounded-lg bg-gray-800 p-1 space-x-1">
-          <button id="tab-dict-kata" class="px-3 py-1.5 rounded-md text-xs font-semibold bg-brand-600 text-white transition-all">
+          <button id="tab-dict-kata" class="px-3.5 py-1.5 rounded-md text-xs font-semibold bg-brand-600 text-white transition-all shadow-sm">
             38 Kosakata
           </button>
-          <button id="tab-dict-abjad" class="px-3 py-1.5 rounded-md text-xs font-semibold text-gray-400 hover:text-white transition-all">
+          <button id="tab-dict-abjad" class="px-3.5 py-1.5 rounded-md text-xs font-semibold text-gray-400 hover:text-white transition-all">
             26 Abjad (A-Z)
           </button>
         </div>
@@ -358,22 +363,73 @@
       </div>
 
       <!-- Modal Body (Grid list) -->
-      <div class="p-4 sm:p-6 overflow-y-auto flex-1">
+      <div class="p-4 sm:p-6 overflow-y-auto flex-1 bg-gray-950/40">
         <!-- Kosakata Grid -->
-        <div id="dict-kata-grid" class="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
-          <!-- Populated dynamically via JS -->
+        <div id="dict-kata-grid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+          <!-- Populated dynamically via JS with animated hand skeleton canvas -->
         </div>
 
         <!-- Abjad Grid -->
-        <div id="dict-abjad-grid" class="grid grid-cols-4 sm:grid-cols-6 gap-2.5 hidden">
-          <!-- Populated dynamically via JS -->
+        <div id="dict-abjad-grid" class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-3 hidden">
+          <!-- Populated dynamically via JS with animated hand skeleton canvas -->
         </div>
       </div>
 
       <!-- Modal Footer -->
-      <div class="p-3.5 border-t border-gray-800 bg-gray-950 text-center text-xs text-gray-500">
-        Tips: Posisikan kedua tangan Anda dengan jelas di depan kamera dan tahan selama ~0.6 detik.
+      <div class="p-3 border-t border-gray-800 bg-gray-950 flex flex-wrap items-center justify-between gap-2 text-xs text-gray-500 px-5">
+        <div class="flex items-center gap-3">
+          <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-brand-400 inline-block"></span> Tangan Utama</span>
+          <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-indigo-400 inline-block"></span> Tangan Kedua</span>
+        </div>
+        <span>Klik pada kartu untuk melihat animasi 3D ukuran penuh.</span>
       </div>
+    </div>
+  </div>
+
+  <!-- ==================== MODAL 1B: DETAIL GESTURE 3D VIEWER ==================== -->
+  <div id="modal-gesture-detail" class="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md hidden p-4">
+    <div class="bg-gray-900 border border-gray-800 rounded-3xl max-w-md w-full shadow-2xl overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-200">
+      
+      <!-- Header -->
+      <div class="p-4 border-b border-gray-800 flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <span id="detail-gesture-type-badge" class="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-brand-500/20 text-brand-400 border border-brand-500/30">
+            Kosakata
+          </span>
+          <span id="detail-gesture-hands-badge" class="px-2 py-0.5 rounded text-[10px] font-semibold bg-gray-800 text-gray-300">
+            2 Tangan
+          </span>
+        </div>
+        <button id="btn-close-gesture-detail" class="text-gray-400 hover:text-white p-1 rounded-lg hover:bg-gray-800 transition-colors">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <!-- 3D Canvas Visualizer -->
+      <div class="relative bg-gradient-to-b from-gray-950 via-gray-900 to-gray-950 p-6 flex flex-col items-center justify-center border-b border-gray-800 overflow-hidden">
+        <canvas id="detail-gesture-canvas" width="280" height="230" class="rounded-2xl"></canvas>
+        <span class="absolute bottom-2 text-[10px] text-gray-500 font-mono tracking-wider">
+          ✦ Rotasi 3D Otomatis Berdasarkan Dataset ✦
+        </span>
+      </div>
+
+      <!-- Info & Practice Button -->
+      <div class="p-5 flex flex-col space-y-4">
+        <div>
+          <h2 id="detail-gesture-title" class="text-2xl font-black text-white tracking-wide mb-1">
+            terima kasih
+          </h2>
+          <p id="detail-gesture-desc" class="text-xs text-gray-400 leading-relaxed">
+            Bentuk tangan diambil dari koordinat titik landmark rata-rata pada dataset BISINDO. Posisikan tangan sesuai visualisasi di atas dan tahan gerakan selama 0.6 detik.
+          </p>
+        </div>
+
+        <button id="btn-practice-in-camera" class="w-full py-2.5 rounded-xl bg-brand-600 hover:bg-brand-500 active:bg-brand-700 text-white font-medium text-xs transition-all shadow-lg shadow-brand-600/25 flex items-center justify-center gap-2">
+          <i data-lucide="camera" class="w-4 h-4"></i>
+          <span>Cobakan Isyarat Ini di Kamera</span>
+        </button>
+      </div>
+
     </div>
   </div>
 

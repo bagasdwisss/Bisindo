@@ -1,6 +1,7 @@
 /**
  * BISINDO Translator - Client-side AI Web Application
- * Powered by TensorFlow.js, MediaPipe Hands, Web Speech API, and PWA
+ * Optimized for High FPS (60 FPS), 3D Animated Hand Skeleton Dictionary,
+ * Two-Way Speech Recognition, and PWA
  */
 
 // Register custom regularizer to handle Keras L2 serialization seamlessly
@@ -20,6 +21,22 @@ try {
   console.warn('L2 regularizer registration notice:', e);
 }
 
+// MediaPipe standard 21-hand landmark connections
+const HAND_CONNECTIONS_MAP = [
+  // Thumb
+  [0, 1], [1, 2], [2, 3], [3, 4],
+  // Index
+  [0, 5], [5, 6], [6, 7], [7, 8],
+  // Middle
+  [5, 9], [9, 10], [10, 11], [11, 12],
+  // Ring
+  [9, 13], [13, 14], [14, 15], [15, 16],
+  // Pinky
+  [13, 17], [17, 18], [18, 19], [19, 20],
+  // Palm Base
+  [0, 17]
+];
+
 // --- Global Application State ---
 const state = {
   // Models and Labels
@@ -27,13 +44,19 @@ const state = {
   modelKosakata: null,
   labelsAbjad: [],
   labelsKosakata: [],
+  landmarksDictionary: null,
   modelsReady: false,
 
   // Camera & MediaPipe
   camera: null,
   hands: null,
   isCameraRunning: false,
-  facingMode: 'user', // 'user' or 'environment'
+  facingMode: 'user',
+
+  // High FPS & Non-blocking Inference Loop
+  isPredicting: false,
+  lastPredictionTime: 0,
+  predictionInterval: 75, // ms (at most 13 predictions/sec; leaves 60 FPS for camera render)
 
   // Recognition Mode & Settings
   isModeAbjad: false, // false = Mode Kata, true = Mode Abjad
@@ -58,10 +81,13 @@ const state = {
   isListening: false,
 
   // Performance / Stats
-  lastFrameTime: performance.now(),
   fps: 0,
   frameCount: 0,
   fpsTimer: performance.now(),
+
+  // Active Detail Gesture Modal Animation
+  activeDetailGesture: null,
+  detailAnimFrameId: null,
 };
 
 // --- DOM Element References ---
@@ -117,6 +143,16 @@ const elements = {
   dictKataGrid: document.getElementById('dict-kata-grid'),
   dictAbjadGrid: document.getElementById('dict-abjad-grid'),
 
+  // Modal 1B: Detail Gesture 3D Viewer
+  modalGestureDetail: document.getElementById('modal-gesture-detail'),
+  btnCloseGestureDetail: document.getElementById('btn-close-gesture-detail'),
+  detailGestureCanvas: document.getElementById('detail-gesture-canvas'),
+  detailGestureTitle: document.getElementById('detail-gesture-title'),
+  detailGestureDesc: document.getElementById('detail-gesture-desc'),
+  detailGestureTypeBadge: document.getElementById('detail-gesture-type-badge'),
+  detailGestureHandsBadge: document.getElementById('detail-gesture-hands-badge'),
+  btnPracticeInCamera: document.getElementById('btn-practice-in-camera'),
+
   // Modal 2: Hearing 2-Way Speech
   btnOpenHearingModal: document.getElementById('btn-open-hearing-modal'),
   modalHearing: document.getElementById('modal-hearing'),
@@ -139,32 +175,39 @@ const elements = {
   btnResetSettings: document.getElementById('btn-reset-settings'),
 };
 
-const canvasCtx = elements.canvas.getContext('2d');
+const canvasCtx = elements.canvas.getContext('2d', { alpha: false, desynchronized: true });
+const detailCanvasCtx = elements.detailGestureCanvas.getContext('2d');
 
-// --- 1. Model Loading ---
+// --- 1. Model & Landmarks Loading ---
 async function loadModels() {
   try {
-    updateSystemStatus('loading', 'Memuat Model AI...');
+    updateSystemStatus('loading', 'Memuat Model AI & Visual...');
 
-    // Load labels JSON
-    const [resAbjad, resKosa] = await Promise.all([
+    // Optimize TensorFlow.js GPU settings for speed
+    await tf.ready();
+    if (tf.getBackend() === 'webgl') {
+      tf.env().set('WEBGL_PACK', true);
+      tf.env().set('WEBGL_PACK_BINARY_OPERATIONS', true);
+    }
+    console.log(`TensorFlow.js backend aktif: ${tf.getBackend()}`);
+
+    // Load labels and landmark dictionary in parallel
+    const [resAbjad, resKosa, resDict] = await Promise.all([
       fetch('./models/web/labels_abjad.json'),
-      fetch('./models/web/labels_kosakata.json')
+      fetch('./models/web/labels_kosakata.json'),
+      fetch('./models/web/landmarks_dictionary.json')
     ]);
 
-    if (!resAbjad.ok || !resKosa.ok) {
-      throw new Error('Gagal mengambil file label model.');
+    if (!resAbjad.ok || !resKosa.ok || !resDict.ok) {
+      throw new Error('Gagal mengambil file model atau kamus visual.');
     }
 
     state.labelsAbjad = await resAbjad.json();
     state.labelsKosakata = await resKosa.json();
+    state.landmarksDictionary = await resDict.json();
 
-    // Populate Dictionary Modal content
-    populateDictionary();
-
-    // Set TensorFlow.js backend
-    await tf.ready();
-    console.log(`TensorFlow.js backend aktif: ${tf.getBackend()}`);
+    // Populate Visual Dictionary
+    populateVisualDictionary();
 
     // Load TF.js Layers Models
     const [modelAbjad, modelKosa] = await Promise.all([
@@ -183,7 +226,7 @@ async function loadModels() {
       state.modelKosakata.predict(dummy);
     });
 
-    console.log('Semua model AI dan label berhasil dimuat!');
+    console.log('Semua model AI, label, dan data visual tangan berhasil dimuat!');
     updateSystemStatus('ready', 'Model AI Siap Digunakan');
 
   } catch (err) {
@@ -208,7 +251,6 @@ function updateSystemStatus(type, message) {
 
 // --- 2. Landmark Processing (Exact equivalent of utils.py) ---
 function processLandmarks(multiHandLandmarks) {
-  // keypoints shape: 126 floats (2 hands * 21 points * 3 coordinates)
   const keypoints = new Float32Array(126);
 
   if (multiHandLandmarks && multiHandLandmarks.length > 0) {
@@ -216,12 +258,11 @@ function processLandmarks(multiHandLandmarks) {
 
     for (let i = 0; i < numHands; i++) {
       const handLandmarks = multiHandLandmarks[i];
-      const wrist = handLandmarks[0]; // Landmark 0 is the wrist
+      const wrist = handLandmarks[0];
       const startIdx = i * 63;
 
       for (let j = 0; j < 21; j++) {
         const lm = handLandmarks[j];
-        // Normalized relative to wrist: lm - wrist
         keypoints[startIdx + j * 3]     = lm.x - wrist.x;
         keypoints[startIdx + j * 3 + 1] = lm.y - wrist.y;
         keypoints[startIdx + j * 3 + 2] = lm.z - wrist.z;
@@ -232,15 +273,16 @@ function processLandmarks(multiHandLandmarks) {
   return keypoints;
 }
 
-// --- 3. MediaPipe Hands Setup ---
+// --- 3. MediaPipe Hands Setup (Optimized for High FPS) ---
 function setupMediaPipe() {
   state.hands = new Hands({
     locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
   });
 
+  // CRUCIAL FOR 60 FPS: modelComplexity: 0 (Lite model is 4x faster and smoother!)
   state.hands.setOptions({
     maxNumHands: 2,
-    modelComplexity: 1,
+    modelComplexity: 0,
     minDetectionConfidence: 0.5,
     minTrackingConfidence: 0.5
   });
@@ -248,9 +290,9 @@ function setupMediaPipe() {
   state.hands.onResults(onHandResults);
 }
 
-// --- 4. Frame Inference & Debounce Engine ---
-async function onHandResults(results) {
-  // Calculate FPS
+// --- 4. High-FPS Rendering & Decoupled Inference Loop ---
+function onHandResults(results) {
+  // 1. Calculate FPS
   state.frameCount++;
   const now = performance.now();
   if (now - state.fpsTimer >= 1000) {
@@ -260,41 +302,53 @@ async function onHandResults(results) {
     state.fpsTimer = now;
   }
 
-  // Set canvas dimension matching video
+  // 2. Adjust Canvas Dimensions if changed
   if (elements.canvas.width !== elements.webcam.videoWidth && elements.webcam.videoWidth > 0) {
     elements.canvas.width = elements.webcam.videoWidth;
     elements.canvas.height = elements.webcam.videoHeight;
   }
 
-  // Draw current frame to canvas
-  canvasCtx.save();
-  canvasCtx.clearRect(0, 0, elements.canvas.width, elements.canvas.height);
+  // 3. Render Camera Frame Immediately (60 FPS without waiting for AI inference)
   canvasCtx.drawImage(results.image, 0, 0, elements.canvas.width, elements.canvas.height);
 
   const numHands = results.multiHandLandmarks ? results.multiHandLandmarks.length : 0;
   elements.handsCountText.innerText = `${numHands} Tangan`;
 
-  let detectedWord = null;
-  let detectedConfidence = 0;
-
-  if (numHands > 0 && state.modelsReady) {
-    // Draw landmarks and connectors with vivid colors
-    for (const landmarks of results.multiHandLandmarks) {
+  // 4. Draw Hand Landmarks Skeleton
+  if (numHands > 0) {
+    for (let h = 0; h < results.multiHandLandmarks.length; h++) {
+      const landmarks = results.multiHandLandmarks[h];
+      const isSecondHand = (h === 1);
       drawConnectors(canvasCtx, landmarks, HAND_CONNECTIONS, {
-        color: '#10b981',
+        color: isSecondHand ? '#818cf8' : '#10b981',
         lineWidth: 3
       });
       drawLandmarks(canvasCtx, landmarks, {
-        color: '#34d399',
+        color: isSecondHand ? '#c084fc' : '#34d399',
         lineWidth: 1,
         radius: 4
       });
     }
 
-    // Extract normalized keypoints vector (126 floats)
-    const keypoints = processLandmarks(results.multiHandLandmarks);
+    // 5. Throttled Non-blocking Async Inference (Leaves 60 FPS for camera rendering)
+    if (state.modelsReady && !state.isPredicting && (now - state.lastPredictionTime >= state.predictionInterval)) {
+      state.isPredicting = true;
+      state.lastPredictionTime = now;
+      predictGesturesAsync(results.multiHandLandmarks);
+    }
+  } else {
+    state.pendingWord = '';
+    elements.predictionHoldBar.style.width = '0%';
+    elements.currentDetectionLabel.innerText = '-';
+    elements.currentConfidenceLabel.innerText = '(0%)';
+  }
+}
 
-    // Run active model prediction
+// Asynchronous Prediction (does not block camera render loop)
+async function predictGesturesAsync(multiHandLandmarks) {
+  try {
+    const keypoints = processLandmarks(multiHandLandmarks);
+
     const activeModel = state.isModeAbjad ? state.modelAbjad : state.modelKosakata;
     const activeLabels = state.isModeAbjad ? state.labelsAbjad : state.labelsKosakata;
     const threshold = state.isModeAbjad ? state.thresholdAbjad : state.thresholdKata;
@@ -307,7 +361,7 @@ async function onHandResults(results) {
     inputTensor.dispose();
     predictionTensor.dispose();
 
-    // Find argmax and max confidence
+    // Find Argmax
     let maxIndex = 0;
     let maxConf = 0;
     for (let i = 0; i < probabilities.length; i++) {
@@ -317,10 +371,9 @@ async function onHandResults(results) {
       }
     }
 
-    detectedWord = activeLabels[maxIndex];
-    detectedConfidence = maxConf;
+    const detectedWord = activeLabels[maxIndex];
 
-    // --- Smoothing & Decision Logic (faithful to app.py) ---
+    // Smoothing & Debounce Decision Logic (faithful to app.py)
     let finalWord = null;
 
     if (maxConf > threshold) {
@@ -337,7 +390,6 @@ async function onHandResults(results) {
         state.history.shift();
       }
 
-      // Count occurrences
       const counts = {};
       let finalIndex = state.history[0];
       let maxCount = 0;
@@ -355,7 +407,7 @@ async function onHandResults(results) {
       }
     }
 
-    // --- Debouncing & Sentence Appending (from app.py) ---
+    // Debounce Timer & Appending
     if (finalWord) {
       const currentTime = Date.now();
 
@@ -391,24 +443,245 @@ async function onHandResults(results) {
       elements.predictionHoldBar.style.width = '0%';
     }
 
-  } else {
-    state.pendingWord = '';
-    elements.predictionHoldBar.style.width = '0%';
-  }
+    // Update UI Labels
+    if (detectedWord && maxConf > 0.3) {
+      elements.currentDetectionLabel.innerText = detectedWord;
+      elements.currentConfidenceLabel.innerText = `(${Math.round(maxConf * 100)}%)`;
+    } else {
+      elements.currentDetectionLabel.innerText = '-';
+      elements.currentConfidenceLabel.innerText = '(0%)';
+    }
 
-  canvasCtx.restore();
-
-  // Update current detection labels on UI
-  if (detectedWord && detectedConfidence > 0.3) {
-    elements.currentDetectionLabel.innerText = detectedWord;
-    elements.currentConfidenceLabel.innerText = `(${Math.round(detectedConfidence * 100)}%)`;
-  } else {
-    elements.currentDetectionLabel.innerText = '-';
-    elements.currentConfidenceLabel.innerText = '(0%)';
+  } catch (err) {
+    console.warn('Inference error:', err);
+  } finally {
+    state.isPredicting = false;
   }
 }
 
-// --- 5. Sentence Builder & NLP Grammar Smoothing ---
+// --- 5. Holographic Vector Hand Skeleton Renderer ---
+function drawHandSkeleton(ctx, hand1Coords, hand2Coords, width, height, time = 0, options = {}) {
+  ctx.clearRect(0, 0, width, height);
+
+  // Subtle dark gradient background
+  const bgGrad = ctx.createRadialGradient(width / 2, height / 2, 10, width / 2, height / 2, width * 0.7);
+  bgGrad.addColorStop(0, '#0f172a');
+  bgGrad.addColorStop(1, '#020617');
+  ctx.fillStyle = bgGrad;
+  ctx.fillRect(0, 0, width, height);
+
+  const hasTwoHands = Boolean(hand2Coords && hand2Coords.length === 21);
+  const scale = (options.scale || 1.6) * Math.min(width, height);
+
+  // Gentle 3D perspective rotation angle
+  const animAngle = options.animate ? Math.sin(time * 0.002) * 0.22 : (options.angle || 0);
+
+  // Draw Hand 1 (Primary - Emerald)
+  if (hand1Coords && hand1Coords.length === 21) {
+    const cx1 = hasTwoHands ? width * 0.32 : width * 0.5;
+    const cy1 = height * 0.78;
+    renderSingleHand(ctx, hand1Coords, cx1, cy1, scale, animAngle, '#10b981', '#34d399');
+  }
+
+  // Draw Hand 2 (Secondary - Indigo/Purple)
+  if (hasTwoHands) {
+    const cx2 = width * 0.68;
+    const cy2 = height * 0.78;
+    renderSingleHand(ctx, hand2Coords, cx2, cy2, scale, -animAngle, '#818cf8', '#a78bfa');
+  }
+}
+
+function renderSingleHand(ctx, points, cx, cy, scale, angle, primaryColor, jointColor) {
+  const projected = [];
+  const cosA = Math.cos(angle);
+  const sinA = Math.sin(angle);
+
+  // Project 3D points
+  for (let i = 0; i < 21; i++) {
+    const [dx, dy, dz] = points[i];
+    const rotX = dx * cosA - dz * sinA;
+    const rotZ = dx * sinA + dz * cosA;
+    const persp = 1 / (1 - rotZ * 0.6);
+
+    const px = cx + rotX * scale * persp;
+    const py = cy + dy * scale * persp; // dy is negative upwards
+    projected.push({ x: px, y: py });
+  }
+
+  // Draw glowing bones
+  ctx.save();
+  ctx.shadowColor = primaryColor;
+  ctx.shadowBlur = 8;
+  ctx.lineWidth = 2.5;
+  ctx.strokeStyle = primaryColor;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+
+  ctx.beginPath();
+  for (const [i, j] of HAND_CONNECTIONS_MAP) {
+    ctx.moveTo(projected[i].x, projected[i].y);
+    ctx.lineTo(projected[j].x, projected[j].y);
+  }
+  ctx.stroke();
+  ctx.restore();
+
+  // Draw joint nodes
+  const fingerTips = new Set([4, 8, 12, 16, 20]);
+  for (let i = 0; i < 21; i++) {
+    const pt = projected[i];
+    const isTip = fingerTips.has(i);
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(pt.x, pt.y, isTip ? 4 : 2.5, 0, Math.PI * 2);
+    ctx.fillStyle = isTip ? '#ffffff' : jointColor;
+    ctx.shadowColor = isTip ? '#ffffff' : jointColor;
+    ctx.shadowBlur = isTip ? 10 : 4;
+    ctx.fill();
+    ctx.restore();
+  }
+}
+
+// --- 6. Populate Visual Dictionary (with Skeleton Canvases) ---
+function populateVisualDictionary() {
+  if (!state.landmarksDictionary) return;
+
+  const { abjad, kosakata } = state.landmarksDictionary;
+
+  // 1. Populate 38 Kosakata
+  elements.dictKataGrid.innerHTML = '';
+  state.labelsKosakata.forEach((kata) => {
+    const data = kosakata[kata];
+    const card = document.createElement('div');
+    card.className = 'dict-card-kata p-3 rounded-2xl bg-gray-900 border border-gray-800 hover:border-brand-500/60 hover:bg-gray-800/60 transition-all cursor-pointer flex flex-col items-center group shadow-md';
+    card.setAttribute('data-name', kata.toLowerCase());
+
+    const twoHandsBadge = data && data.twoHands
+      ? `<span class="text-[9px] px-1.5 py-0.5 rounded font-semibold bg-indigo-500/20 text-indigo-400 border border-indigo-500/30">2 Tangan</span>`
+      : `<span class="text-[9px] px-1.5 py-0.5 rounded font-semibold bg-brand-500/20 text-brand-400 border border-brand-500/30">1 Tangan</span>`;
+
+    card.innerHTML = `
+      <div class="w-full flex items-center justify-between mb-2">
+        <span class="font-bold text-sm text-white group-hover:text-brand-400 transition-colors capitalize">${kata}</span>
+        ${twoHandsBadge}
+      </div>
+      <div class="relative w-full aspect-[4/3] rounded-xl overflow-hidden bg-gray-950 border border-gray-800/80 mb-2 flex items-center justify-center">
+        <canvas class="dict-thumb-canvas w-full h-full" width="160" height="120"></canvas>
+      </div>
+      <span class="text-[10px] text-gray-500 group-hover:text-gray-400 transition-colors">Klik untuk Pratinjau 3D</span>
+    `;
+
+    // Render thumbnail skeleton
+    const thumbCanvas = card.querySelector('.dict-thumb-canvas');
+    if (data && thumbCanvas) {
+      const tctx = thumbCanvas.getContext('2d');
+      drawHandSkeleton(tctx, data.hand1, data.hand2, 160, 120, 0, { animate: false, scale: 1.55 });
+    }
+
+    // Card click opens 3D Inspector Detail
+    card.addEventListener('click', () => {
+      openGestureDetail(data || { name: kata, type: 'kata', twoHands: false, hand1: null, hand2: null });
+    });
+
+    elements.dictKataGrid.appendChild(card);
+  });
+
+  // 2. Populate 26 Abjad (A-Z)
+  elements.dictAbjadGrid.innerHTML = '';
+  state.labelsAbjad.forEach((huruf) => {
+    const data = abjad[huruf];
+    const card = document.createElement('div');
+    card.className = 'dict-card-abjad p-3 rounded-2xl bg-gray-900 border border-gray-800 hover:border-purple-500/60 hover:bg-gray-800/60 transition-all cursor-pointer flex flex-col items-center group shadow-md';
+    card.setAttribute('data-name', huruf.toLowerCase());
+
+    const twoHandsBadge = data && data.twoHands
+      ? `<span class="text-[9px] px-1.5 py-0.5 rounded font-semibold bg-indigo-500/20 text-indigo-400 border border-indigo-500/30">2 Tangan</span>`
+      : `<span class="text-[9px] px-1.5 py-0.5 rounded font-semibold bg-purple-500/20 text-purple-400 border border-purple-500/30">1 Tangan</span>`;
+
+    card.innerHTML = `
+      <div class="w-full flex items-center justify-between mb-2">
+        <span class="font-extrabold text-lg text-purple-400 group-hover:text-purple-300 transition-colors">${huruf}</span>
+        ${twoHandsBadge}
+      </div>
+      <div class="relative w-full aspect-[4/3] rounded-xl overflow-hidden bg-gray-950 border border-gray-800/80 mb-2 flex items-center justify-center">
+        <canvas class="dict-thumb-canvas w-full h-full" width="160" height="120"></canvas>
+      </div>
+      <span class="text-[10px] text-gray-500 group-hover:text-gray-400 transition-colors">Pratinjau 3D</span>
+    `;
+
+    // Render thumbnail skeleton
+    const thumbCanvas = card.querySelector('.dict-thumb-canvas');
+    if (data && thumbCanvas) {
+      const tctx = thumbCanvas.getContext('2d');
+      drawHandSkeleton(tctx, data.hand1, data.hand2, 160, 120, 0, { animate: false, scale: 1.55 });
+    }
+
+    card.addEventListener('click', () => {
+      openGestureDetail(data || { name: huruf, type: 'abjad', twoHands: false, hand1: null, hand2: null });
+    });
+
+    elements.dictAbjadGrid.appendChild(card);
+  });
+}
+
+function filterDictionary(query) {
+  const q = query.toLowerCase().trim();
+
+  document.querySelectorAll('.dict-card-kata').forEach((c) => {
+    c.classList.toggle('hidden', !c.getAttribute('data-name').includes(q));
+  });
+
+  document.querySelectorAll('.dict-card-abjad').forEach((c) => {
+    c.classList.toggle('hidden', !c.getAttribute('data-name').includes(q));
+  });
+}
+
+// --- 7. Gesture Detail 3D Hologram Modal Animation ---
+function openGestureDetail(gestureData) {
+  state.activeDetailGesture = gestureData;
+
+  elements.detailGestureTitle.innerText = gestureData.name;
+  elements.detailGestureTypeBadge.innerText = gestureData.type === 'abjad' ? 'Huruf Abjad' : 'Kosakata Kata';
+  elements.detailGestureHandsBadge.innerText = gestureData.twoHands ? '2 Tangan (Kedua Tangan)' : '1 Tangan (Tangan Utama)';
+
+  elements.detailGestureDesc.innerText = gestureData.twoHands
+    ? `Isyarat "${gestureData.name}" menggunakan kedua tangan. Posisikan kedua tangan Anda sejajar di depan kamera dan tahan gerakan selama 0.6 detik.`
+    : `Isyarat "${gestureData.name}" menggunakan satu tangan utama. Angkat tangan Anda di depan kamera dengan formasi jari sesuai visualisasi 3D di atas.`;
+
+  elements.modalGestureDetail.classList.remove('hidden');
+
+  // Start smooth 3D rotation animation loop for this gesture
+  if (state.detailAnimFrameId) cancelAnimationFrame(state.detailAnimFrameId);
+
+  function animateDetail(time) {
+    if (!state.activeDetailGesture || elements.modalGestureDetail.classList.contains('hidden')) return;
+
+    drawHandSkeleton(
+      detailCanvasCtx,
+      state.activeDetailGesture.hand1,
+      state.activeDetailGesture.hand2,
+      280,
+      230,
+      time,
+      { animate: true, scale: 1.6 }
+    );
+
+    state.detailAnimFrameId = requestAnimationFrame(animateDetail);
+  }
+
+  state.detailAnimFrameId = requestAnimationFrame(animateDetail);
+}
+
+function closeGestureDetail() {
+  elements.modalGestureDetail.classList.add('hidden');
+  state.activeDetailGesture = null;
+  if (state.detailAnimFrameId) {
+    cancelAnimationFrame(state.detailAnimFrameId);
+    state.detailAnimFrameId = null;
+  }
+}
+
+// --- 8. Sentence Builder & NLP Grammar Smoothing ---
 function getDisplayText() {
   let displayText = '';
 
@@ -426,7 +699,7 @@ function getDisplayText() {
         if (prevType === 'kata') {
           displayText += ' ' + word;
         } else {
-          displayText += word; // Abjad letters concatenate without space (spelling)
+          displayText += word;
         }
       }
     }
@@ -445,19 +718,12 @@ function renderTranslation() {
   }
 }
 
-// NLP Grammar Smoothing Function
 function smoothSentenceNLP(rawText) {
   if (!rawText || !rawText.trim()) return '';
 
-  let text = rawText.trim();
-
-  // Normalize duplicate spaces
-  text = text.replace(/\s+/g, ' ');
-
-  // Capitalize first letter of every sentence
+  let text = rawText.trim().replace(/\s+/g, ' ');
   text = text.replace(/(^\w|\.\s+\w)/g, (c) => c.toUpperCase());
 
-  // Add terminal period if missing
   if (!/[.!?]$/.test(text)) {
     text += '.';
   }
@@ -465,14 +731,11 @@ function smoothSentenceNLP(rawText) {
   return text;
 }
 
-// --- 6. Text-to-Speech (Web Speech API) ---
+// --- 9. Text-to-Speech (Web Speech API) ---
 function speakText(text) {
   if (!text || !text.trim()) return;
 
-  if (!('speechSynthesis' in window)) {
-    console.warn('Browser tidak mendukung Web Speech API.');
-    return;
-  }
+  if (!('speechSynthesis' in window)) return;
 
   window.speechSynthesis.cancel();
   const utterance = new SpeechSynthesisUtterance(text.trim());
@@ -480,9 +743,7 @@ function speakText(text) {
 
   const voices = window.speechSynthesis.getVoices();
   const idVoice = voices.find(v => v.lang.startsWith('id') || v.lang.includes('ID'));
-  if (idVoice) {
-    utterance.voice = idVoice;
-  }
+  if (idVoice) utterance.voice = idVoice;
 
   utterance.rate = 1.0;
   window.speechSynthesis.speak(utterance);
@@ -494,14 +755,10 @@ if ('speechSynthesis' in window) {
   };
 }
 
-// --- 7. Two-Way Speech Recognition (Teman Dengar Bicara) ---
+// --- 10. Two-Way Speech Recognition ---
 function setupSpeechRecognition() {
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-
-  if (!SpeechRecognition) {
-    console.warn('Browser tidak mendukung Web Speech Recognition.');
-    return;
-  }
+  if (!SpeechRecognition) return;
 
   state.recognition = new SpeechRecognition();
   state.recognition.lang = 'id-ID';
@@ -523,11 +780,10 @@ function setupSpeechRecognition() {
 
     elements.speechTranscriptOutput.innerText = transcript || 'Sedang mendengarkan...';
 
-    // Highlight recognized BISINDO vocabulary tags
     const words = transcript.toLowerCase().split(/\s+/);
     elements.speechDetectedTags.innerHTML = '';
-
     const recognizedInDict = new Set();
+
     words.forEach((w) => {
       const cleanWord = w.replace(/[^\w\s]/gi, '');
       if (state.labelsKosakata.includes(cleanWord)) {
@@ -574,57 +830,7 @@ function stopSpeechRecognition() {
   }
 }
 
-// --- 8. Dictionary Population & Search ---
-function populateDictionary() {
-  // 38 Kosakata
-  elements.dictKataGrid.innerHTML = '';
-  state.labelsKosakata.forEach((kata) => {
-    const card = document.createElement('div');
-    card.className = 'dict-card-kata p-3 rounded-xl bg-gray-950 border border-gray-800 hover:border-brand-500/50 transition-all flex flex-col justify-between';
-    card.setAttribute('data-name', kata.toLowerCase());
-    card.innerHTML = `
-      <div class="flex items-center justify-between mb-1">
-        <span class="font-bold text-sm text-brand-400">${kata}</span>
-        <span class="text-[10px] px-1.5 py-0.5 rounded bg-brand-500/10 text-brand-400">Kata</span>
-      </div>
-      <p class="text-[11px] text-gray-500">2 Tangan / Gestur BISINDO</p>
-    `;
-    elements.dictKataGrid.appendChild(card);
-  });
-
-  // 26 Abjad
-  elements.dictAbjadGrid.innerHTML = '';
-  state.labelsAbjad.forEach((huruf) => {
-    const card = document.createElement('div');
-    card.className = 'dict-card-abjad p-3 rounded-xl bg-gray-950 border border-gray-800 hover:border-purple-500/50 transition-all flex flex-col items-center justify-center text-center';
-    card.setAttribute('data-name', huruf.toLowerCase());
-    card.innerHTML = `
-      <span class="text-xl font-black text-purple-400 mb-0.5">${huruf}</span>
-      <span class="text-[10px] text-gray-500">Huruf</span>
-    `;
-    elements.dictAbjadGrid.appendChild(card);
-  });
-}
-
-function filterDictionary(query) {
-  const q = query.toLowerCase().trim();
-
-  // Filter Kata
-  const kataCards = document.querySelectorAll('.dict-card-kata');
-  kataCards.forEach((c) => {
-    const name = c.getAttribute('data-name');
-    c.classList.toggle('hidden', !name.includes(q));
-  });
-
-  // Filter Abjad
-  const abjadCards = document.querySelectorAll('.dict-card-abjad');
-  abjadCards.forEach((c) => {
-    const name = c.getAttribute('data-name');
-    c.classList.toggle('hidden', !name.includes(q));
-  });
-}
-
-// --- 9. Camera Controls ---
+// --- 11. Camera Controls (Optimized Constraints for 60 FPS) ---
 async function startCamera() {
   if (state.isCameraRunning) return;
 
@@ -634,8 +840,9 @@ async function startCamera() {
     const constraints = {
       video: {
         facingMode: state.facingMode,
-        width: { ideal: 640 },
-        height: { ideal: 480 }
+        width: { ideal: 640, max: 640 },
+        height: { ideal: 480, max: 480 },
+        frameRate: { ideal: 30, max: 60 }
       },
       audio: false
     };
@@ -716,7 +923,7 @@ function switchCamera() {
   }
 }
 
-// --- 10. UI Mode Switcher ---
+// --- 12. UI Mode Switcher ---
 function setMode(mode) {
   state.isModeAbjad = (mode === 'abjad');
 
@@ -740,7 +947,7 @@ function setMode(mode) {
   elements.predictionHoldBar.style.width = '0%';
 }
 
-// --- 11. Event Listeners ---
+// --- 13. Event Listeners Setup ---
 function setupEventListeners() {
   // Camera buttons
   elements.btnStartCamera.addEventListener('click', startCamera);
@@ -833,17 +1040,36 @@ function setupEventListeners() {
   elements.tabDictKata.addEventListener('click', () => {
     elements.dictKataGrid.classList.remove('hidden');
     elements.dictAbjadGrid.classList.add('hidden');
-    elements.tabDictKata.className = 'px-3 py-1.5 rounded-md text-xs font-semibold bg-brand-600 text-white transition-all';
-    elements.tabDictAbjad.className = 'px-3 py-1.5 rounded-md text-xs font-semibold text-gray-400 hover:text-white transition-all';
+    elements.tabDictKata.className = 'px-3.5 py-1.5 rounded-md text-xs font-semibold bg-brand-600 text-white transition-all shadow-sm';
+    elements.tabDictAbjad.className = 'px-3.5 py-1.5 rounded-md text-xs font-semibold text-gray-400 hover:text-white transition-all';
   });
   elements.tabDictAbjad.addEventListener('click', () => {
     elements.dictKataGrid.classList.add('hidden');
     elements.dictAbjadGrid.classList.remove('hidden');
-    elements.tabDictAbjad.className = 'px-3 py-1.5 rounded-md text-xs font-semibold bg-purple-600 text-white transition-all';
-    elements.tabDictKata.className = 'px-3 py-1.5 rounded-md text-xs font-semibold text-gray-400 hover:text-white transition-all';
+    elements.tabDictAbjad.className = 'px-3.5 py-1.5 rounded-md text-xs font-semibold bg-purple-600 text-white transition-all shadow-sm';
+    elements.tabDictKata.className = 'px-3.5 py-1.5 rounded-md text-xs font-semibold text-gray-400 hover:text-white transition-all';
   });
   elements.dictSearchInput.addEventListener('input', (e) => {
     filterDictionary(e.target.value);
+  });
+
+  // Modal 1B: Detail 3D Gesture Events
+  elements.btnCloseGestureDetail.addEventListener('click', closeGestureDetail);
+  elements.btnPracticeInCamera.addEventListener('click', () => {
+    if (state.activeDetailGesture) {
+      if (state.activeDetailGesture.type === 'abjad') {
+        elements.radioModeAbjad.checked = true;
+        setMode('abjad');
+      } else {
+        elements.radioModeKata.checked = true;
+        setMode('kata');
+      }
+    }
+    closeGestureDetail();
+    elements.modalDictionary.classList.add('hidden');
+    if (!state.isCameraRunning) {
+      startCamera();
+    }
   });
 
   // --- Modal 2: Hearing Event Listeners ---
